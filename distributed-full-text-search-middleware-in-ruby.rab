@@ -133,13 +133,16 @@ Rubyを使っても\n
     * そんなに流行らなくてもよい
   * 開発ノウハウ
     * 後続が開発しやすくなる
+    * ライブラリー化されていると尚よし
 
 = 領域拡大の対象分野案
 
 ミドルウェア\n
 ↓\n
 アプリは\n
-好きな言語で書ける
+好きな言語で書ける\n
+(('note:（採用障壁が低め）'))\n
+(('note:（例：RabbitMQはErlang製だがアプリはErlang以外が多い）'))
 
 = ミドルウェア
 
@@ -191,19 +194,113 @@ Rubyを使っても\n
 
   * ((*処理を減らす*))
   * マルチプロセス
-    * 1スレッド・パイプ・spawn
+    * 後述
   * Cで拡張ライブラリーを書く
     * Fluentd: MessagePack
     * Droonga: MessagePack, Groonga
+
+= マルチプロセス実装
+
+  * ServerEngine（ライブラリー）
+    * nスレッド+シグナル+fork(('note:(spawn)'))
+  * Droonga
+    * 1スレッド+パイプ+spawn(('note: +イベントループ'))
+    * ↑の方がオススメ
+
+= 実装の違いの図
+
+= オススメポイント
+
+  * gracefulなstop/restartをしやすい
+  * シンプルになる
+    * stop中にn回stopが来ない
+    * 非同期でstopの処理をしなくてよい
 
 = ネットワークネック
 
   * ノンブロッキングI/Oと多重化
     * 拡張ライブラリー必須
     * →Cool.io, nio4r, EventMachine
+    * イベント駆動なコードは複雑
   * 通信量を減らす
     * ((*データを減らす*))
     * ムリなら圧縮（zlib, LZ4）
+
+= イベント駆動なコード
+
+  # coderay ruby
+
+  Coolio::TCPServer.new(HOST, PORT) do |client|
+    n_reads = 0
+    client.on_read do |data|
+      p data
+      client.write(data)
+      n_reads += 1
+      if n_reads == 2
+        client.on_write_complete {client.close}
+      end
+    end
+  end
+
+= 同期っぽく書けるAPI
+
+  # coderay ruby
+
+  Coolio::TCPServer.new(HOST, PORT) do |client|
+    Fiber.run do # <- 並行にしたい処理を明示
+      client.extend(Synchronizable) # <- 42行
+      2.times do
+        data = client.read
+        p data
+        client.write(data)
+      end
+      client.close
+    end
+  end
+
+= 同期っぽく書けるAPI
+
+  * ユーザーがFiberを書くのが\n
+    カッコ悪い
+  * いつでもFiberで囲めるのか？
+  * 同期っぽい中で\n
+    並行に処理したくなったら？
+
+= Promiseな世界
+
+  # coderay ruby
+
+  server.accept.then do |client|
+    [client, client.read]
+  end.then do |client, data|
+    p data
+    client.write(data)
+    client
+  end.then do |client|
+    client.close
+  end.catch do |error|
+  end
+
+= Promiseな世界
+
+  * 繰り返しを書きにくい
+  * メソッドチェーンがカッコ悪い
+  * catchがカッコ悪い
+
+= こんなAPIはどうか？
+
+  # coderay ruby
+
+  # 同期API
+  response = client.request
+  # 非同期API
+  request = client.request do |response|
+    begin
+      response.body
+    rescue
+    end
+  end
+  request.join
 
 = I/Oとメモリーネック
 
