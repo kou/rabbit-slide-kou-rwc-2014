@@ -271,13 +271,12 @@ Rubyを使っても\n
   # coderay ruby
 
   server.accept.then do |client|
-    [client, client.read]
-  end.then do |client, data|
-    p data
-    client.write(data)
-    client
-  end.then do |client|
-    client.close
+    client.read.then do |data|
+      p data
+      client.write(data)
+    end.then do
+      client.close
+    end
   end.catch do |error|
   end
 
