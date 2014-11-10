@@ -207,14 +207,55 @@ Rubyを使っても\n
     * 1スレッド+パイプ+spawn(('note: +イベントループ'))
     * ↑の方がオススメ
 
-= 実装の違いの図
+= ServerEngine
 
-= オススメポイント
+  # image
+  # src = images/serverengine-model.svg
+  # relative_height = 100
 
-  * gracefulなstop/restartをしやすい
+== スライドプロパティー
+
+: enable-title-on-image
+   false
+
+= ServerEngineモデル1
+
+  * 基本はSupervisor→Worker
+    * ハートビートは例外
+  * gracefulな再起動をしにくい
+    * 新Workerがいつ準備完了したか\n
+      わからない
+    * Worker→Supervisorがない
+
+= ServerEngineモデル2
+
+  * スレッドは難しい
+    * エラーに気づいている？
+    * rescueしてる？joinしてる？
+  * シグナルは難しい
+    * 終了中に何度でもSIGINT
+    * 終了フラグを立てるくらいしか\n
+      できない
+
+= ServerEngineモデル3
+
+  * ライブラリー化していてえらい
+
+= Droongaモデル1
+
+  * 通信はSupervisor↔Worker
+  * gracefulな再起動をしやすい
+    * 新Workerが準備完了\n
+      →Supervisorに通知\n
+      →旧Workerをgracefulに終了
+
+= Droongaモデル2
+
   * シンプルになる
-    * stop中にn回stopが来ない
-    * 非同期でstopの処理をしなくてよい
+    * 1スレッド・シグナルなし
+    * stop中にn回stopがこない
+    * 終了処理中に割り込まれない
+  * イベント駆動は複雑
 
 = ネットワークネック
 
@@ -286,20 +327,41 @@ Rubyを使っても\n
   * メソッドチェーンがカッコ悪い
   * catchがカッコ悪い
 
-= こんなAPIはどうか？
+= API案：基本
 
   # coderay ruby
 
-  # 同期API
-  response = client.request
+  # 同期っぽいAPI
+  clinet = server.accept
   # 非同期API
-  request = client.request do |response|
+  server.accept do |request|
     begin
-      response.body
+      client = request.socket
     rescue
     end
   end
-  request.join
+
+= API案：組み合わせ
+
+  # coderay ruby
+
+  server.accept do |request|
+    client = request.socket
+    2.times do
+      data = client.read
+      p data
+      client.write(data)
+    end
+    client.close
+  end
+
+= API案
+
+  * Fiberが見えない
+  * 書き方の組み合わせが自然
+    * ブロックなし→同期っぽいAPI
+    * ブロックあり→非同期API
+  * 実装していない😜
 
 = I/Oとメモリーネック
 
@@ -449,4 +511,8 @@ Droongaの紹介
 
 = Droonga
 
-http://droonga.org/
+http://droonga.org/\n
+\n
+11/29（いい肉の日）\n
+Groongaイベント開催(('note:（東京）'))\n
+(('note:http://groonga.doorkeeper.jp/events/15816'))
