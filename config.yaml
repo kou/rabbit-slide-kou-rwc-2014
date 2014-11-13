@@ -4,7 +4,7 @@ base_name: distributed-full-text-search-middleware-in-ruby
 tags:
 - rabbit
 - ruby
-- full-text-search
+- rwc2014
 presentation_date: 2014-11-13
 version: 2014.11.13.5
 licenses:
